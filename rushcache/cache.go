@@ -1,7 +1,7 @@
-package RushCache
+package rushcache
 
 import (
-	"RushCache/lru"
+	"rushcache/lru"
 	"sync"
 )
 

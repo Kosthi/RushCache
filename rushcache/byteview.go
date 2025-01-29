@@ -1,4 +1,4 @@
-package RushCache
+package rushcache
 
 func cloneBytes(b []byte) []byte {
 	c := make([]byte, len(b))

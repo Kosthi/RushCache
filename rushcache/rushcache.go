@@ -1,4 +1,4 @@
-package RushCache
+package rushcache
 
 import (
 	"fmt"
