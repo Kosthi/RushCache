@@ -2,11 +2,13 @@ package rushcache
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"rushcache/consistenthash"
+	pb "rushcache/rushcachepb"
 	"strings"
 	"sync"
 )
@@ -16,7 +18,7 @@ type PeerPicker interface {
 }
 
 type PeerGetter interface {
-	Get(group string, key string) ([]byte, error)
+	Get(req *pb.Request, resp *pb.Response) error
 }
 
 var _ PeerPicker = (*HTTPPool)(nil)
@@ -75,9 +77,14 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body, err := proto.Marshal(&pb.Response{Value: view.ByteSlice()})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(view.ByteSlice())
-	w.Write([]byte("\n"))
+	w.Write(body)
+	// w.Write([]byte("\n"))
 }
 
 func (p *HTTPPool) Set(peers ...string) {
@@ -105,27 +112,31 @@ type httpGetter struct {
 	baseURL string
 }
 
-func (h *httpGetter) Get(group string, key string) ([]byte, error) {
-	u := fmt.Sprintf(
+func (h *httpGetter) Get(req *pb.Request, resp *pb.Response) error {
+	url := fmt.Sprintf(
 		"%v%v/%v",
 		h.baseURL,
-		url.QueryEscape(group),
-		url.QueryEscape(key),
+		url.QueryEscape(req.GetGroup()),
+		url.QueryEscape(req.GetKey()),
 	)
-	resp, err := http.Get(u)
+	res, err := http.Get(url)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status: %s", resp.Status)
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", res.Status)
 	}
 
-	bytes, err := ioutil.ReadAll(resp.Body)
+	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading respone body: %v", err)
+		return fmt.Errorf("reading respone body: %v", err)
 	}
 
-	return bytes, nil
+	if err = proto.Unmarshal(bytes, resp); err != nil {
+		return fmt.Errorf("unmarshaling response: %v", err)
+	}
+
+	return nil
 }

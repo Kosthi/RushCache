@@ -3,6 +3,7 @@ package rushcache
 import (
 	"fmt"
 	"log"
+	pb "rushcache/rushcachepb"
 	"rushcache/singleflight"
 	"sync"
 )
@@ -95,11 +96,16 @@ func (g *Group) load(key string) (value ByteView, err error) {
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (value ByteView, err error) {
-	bytes, err := peer.Get(g.name, key)
+	req := &pb.Request{
+		Group: g.name,
+		Key:   key,
+	}
+	resp := &pb.Response{}
+	err = peer.Get(req, resp)
 	if err != nil {
 		return ByteView{}, err
 	}
-	return ByteView{b: cloneBytes(bytes)}, nil
+	return ByteView{b: cloneBytes(resp.Value)}, nil
 }
 
 func (g *Group) Get(key string) (ByteView, error) {
